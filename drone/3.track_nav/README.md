@@ -18,7 +18,7 @@
    （正常报错，无妨）
 14.（编译代码）catkin_make_isolated --install --use-ninja  -DPYTHON_EXECUTABLE=/usr/bin/python3
 将lua文件和launch文件复制进cartograoher项目里面然后再编译一遍
-启动：roslaunch 
+启动：roslaunch cartographer_ros livox.launch
 
 # navigation
 安装依赖：
@@ -34,3 +34,5 @@ cd ros_nav_ws/src
 git clone https://github.com/ros-planning/navigation.git
 cd ..
 catkin_make
+将导航的launch文件复制进navigation的项目结构里面
+启动：roslaunch move_base nav_3dto2d.launch
