@@ -1,0 +1,26 @@
+# 是否在move_base关闭时同时关闭costmap
+shutdown_costmaps: false
+
+# 控制器(local planner)执行频率(Hz)
+controller_frequency: 10.0
+
+# 全局规划器等待时间(秒)，规划失败后等待此时间再重新规划
+planner_patience: 5.0
+
+# 控制器等待时间(秒)，控制失败后等待此时间再重新规划
+controller_patience: 15.0
+
+# 保守复位距离(米)，机器人卡住后在此距离内清理障碍物并重新规划
+conservative_reset_dist: 3.0
+
+# 全局规划器规划频率(Hz)
+planner_frequency: 5.0
+
+# 振荡超时时间(秒)，机器人来回振荡超过此时间认为卡住
+oscillation_timeout: 3.0
+
+# 振荡检测距离(米)，机器人来回移动超过此距离不算振荡
+oscillation_distance: 0.2
+
+# 是否允许通过旋转来清除costmap中的障碍物
+clearing_rotation_allowed: false

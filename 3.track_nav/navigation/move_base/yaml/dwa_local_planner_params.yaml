@@ -1,0 +1,69 @@
+DWAPlannerROS:
+
+  # 最大x方向线速度(米/秒)
+  max_vel_x: 1.2
+  # 最小x方向线速度(米/秒)，负值表示允许后退
+  min_vel_x: -2.0
+
+  # 最大y方向线速度(米/秒)，用于全向移动
+  max_vel_y: 2.0
+  # 最小y方向线速度(米/秒)，负值表示反向移动
+  min_vel_y: -2.0
+
+  # 最大平移(合成)速度(米/秒)
+  max_vel_trans:  2.0
+  # 最小平移(合成)速度(米/秒)
+  min_vel_trans:  0.08
+
+  # 最大角速度(弧度/秒)，0表示禁止旋转
+  max_vel_theta: 0.0
+  # 最小角速度(弧度/秒)，0表示禁止旋转
+  min_vel_theta: 0.0
+
+  # x方向最大加速度(米/秒²)
+  acc_lim_x: 10.0
+  # y方向最大加速度(米/秒²)
+  acc_lim_y: 10.0
+  # 最大角加速度(弧度/秒²)
+  acc_lim_theta: 0.0
+
+  # xy平面目标容差(米)，到达目标此距离内即视为到达
+  xy_goal_tolerance: 0.2
+  # 偏航角目标容差(弧度)，到达目标此角度内即视为到达
+  yaw_goal_tolerance: 1.57
+  # 是否在到达xy容差后锁定（不再旋转对准目标朝向）
+  latch_xy_goal_tolerance: false
+
+  # 仿真时间(秒)，前向仿真的时间长度，越大规划越保守
+  sim_time: 3.0
+  # x方向速度采样数，在min_vel_x和max_vel_x之间采样的速度值个数
+  vx_samples: 20
+  # y方向速度采样数
+  vy_samples: 20
+  # 角速度采样数
+  vth_samples: 40
+  # 控制器更新频率(Hz)
+  controller_frequency: 10.0
+
+  # 路径跟随权重，值越大越倾向于沿全局路径走
+  path_distance_bias: 32.0
+  # 目标接近权重，值越大越倾向于朝目标点走
+  goal_distance_bias: 20.0
+  # 障碍物距离权重，值越大越倾向于远离障碍物
+  occdist_scale: 0.05
+  # 前向仿真距离(米)，沿当前速度方向评估障碍物的距离
+  forward_point_distance: 0.325
+  # 停止时间缓冲(秒)，规划中预留的制动时间余量
+  stop_time_buffer: 0.2
+  # 缩放速度(米/秒)，超过此速度时代价缩放因子开始生效
+  scaling_speed: 0.25
+  # 最大缩放因子，放大代价的能力上限
+  max_scaling_factor: 0.2
+
+  # 振荡复位距离(米)，机器人移动超过此距离则重置振荡检测
+  oscillation_reset_dist: 0.05
+
+  # 是否发布规划轨迹点云（用于可视化）
+  publish_traj_pc : true
+  # 是否发布代价网格点云（用于可视化）
+  publish_cost_grid_pc: true

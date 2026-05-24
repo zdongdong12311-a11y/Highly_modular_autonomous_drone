@@ -1,0 +1,30 @@
+local_costmap:
+  # 全局坐标系名称，局部代价地图在此坐标系下发布
+  global_frame: camera_init
+  # 机器人基座坐标系名称
+  robot_base_frame: body
+
+  # 代价地图更新频率(Hz)
+  update_frequency: 10.0
+  # 代价地图发布频率(Hz)
+  publish_frequency: 10.0
+  # 坐标变换容忍时间(秒)，超过此时间的tf变换将被丢弃
+  transform_tolerance: 1.0
+
+  # 是否使用静态地图，false表示不使用预先加载的地图
+  static_map: false
+  # 是否使用滚动窗口，true表示代价地图随机器人移动而滚动
+  rolling_window: true
+
+  # 代价地图宽度(米)，滚动窗口的宽度
+  width: 5
+  # 代价地图高度(米)，滚动窗口的高度
+  height: 5
+  # 代价地图分辨率(米/格)，每个网格代表的实际距离
+  resolution: 0.03
+
+  # 插件列表，按顺序加载的costmap插件层
+  plugins:
+    - {name: static_layer,    type: "costmap_2d::StaticLayer"}
+    - {name: obstacle_layer,  type: "costmap_2d::ObstacleLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
