@@ -163,25 +163,29 @@ x y z hover_time
 - 局部代价地图使用 `camera_init` 作为全局坐标系
 - 全局代价地图使用 `map` 作为全局坐标系
 
-### ⚠️ TF 帧冲突说明（重要）
+### ⚠️ TF 帧说明
 
-FAST-LIO2 默认将 `lidar_odometry_frame_id` 设为 `"map"`，会发布 TF `map → body`；而 Cartographer 的 `map_frame` 也是 `"map"`，会发布 TF `map → camera_init`。两个节点同时争夺 `map` 坐标系定义权，造成以下问题：
+**官方 hku-mars FAST-LIO2** 的坐标系名称是硬编码在 C++ 源码中的：
+- 父坐标系：`camera_init`（对应里程计/地图坐标系）
+- 子坐标系：`body`（对应无人机本体坐标系）
 
-1. **TF 路径冲突**：从 `map` 到 `body` 存在两条不同路径（FAST-LIO2 直连 vs Cartographer→camera_init→base_link→body）
-2. **原点不一致**：双方各自初始化 `map` 原点，实际坐标不一致
+因此 FAST-LIO2 发布 TF：`camera_init → body`。
 
-**解决方案：** 修改 FAST-LIO2 的 `config/mid360.yaml`，将 `lidar_odometry_frame_id` 改为 `"world"` 以避免抢占 Cartographer 的 `map` 帧：
+**Cartographer** 配置为 `published_frame = "camera_init"`，发布 TF：`map → camera_init`（SLAM 估计结果）。
 
-```yaml
-common:
-  lidar_odometry_frame_id: "world"   # 原为 "map"，改为 world 避免冲突
-  body_pose_frame_id: "body"
-```
+两条 TF 链互补、不冲突：`map → camera_init → body`。
 
-或在启动时通过 ROS 参数覆盖（无需改 yaml）：
-```bash
-roslaunch fast_lio mapping_mid360.launch lidar_odometry_frame_id:=world
-```
+> ⚠️ 如果你看到网上教程提到 `lidar_odometry_frame_id`、`body_pose_frame_id` 等参数，那是社区个人移植版（如 guzhaoyuan 的 fork）添加的功能，**官方版本没有这些参数**，不能通过改 yaml 或命令行参数修改坐标系名称。
+
+如需修改 FAST-LIO2 的 TF 坐标系名，需直接编辑 `src/FAST_LIO/src/laserMapping.cpp`，修改以下硬编码字符串：
+
+| 位置 | 原文 | 改为 |
+|------|------|------|
+| `publish_odometry()` 中 | `"camera_init"` | 你想要的父坐标系名 |
+| `publish_odometry()` 中 | `"body"` | 你想要的子坐标系名 |
+| 其他相关函数（约 5 处） | `"camera_init"` / `"body"` | 同上 |
+
+修改后重新编译即可生效。
 
 ### 安全建议
 
