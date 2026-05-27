@@ -80,16 +80,18 @@ drone/
 │   ├── README.md
 │   └── point_to_scan.launch
 │
-└── 3.track_nav/                 ← Step 3: SLAM + 导航
-    ├── README.md
-    ├── cartographer/            ← Cartographer SLAM 配置
-    │   ├── launch/livox.launch
-    │   └── lua/livox.lua
-    └── navigation/              ← ROS Navigation Stack 配置
-        └── move_base/
-            ├── launch/nav_3dto2d.launch
-            ├── config/nav.rviz
-            └── yaml/            ← 规划器参数 (6个文件)
+├── 3.track_nav/                 ← Step 3: SLAM + 导航
+│   ├── README.md
+│   ├── cartographer/            ← Cartographer SLAM 配置
+│   │   ├── launch/livox.launch
+│   │   └── lua/livox.lua
+│   └── navigation/              ← ROS Navigation Stack 配置
+│       └── move_base/
+│           ├── launch/nav_3dto2d.launch
+│           ├── config/nav.rviz
+│           └── yaml/            ← 规划器参数 (6个文件)
+│
+└── Modular_fuctions/            ← 模块化功能集
 ```
 
 ## 前置安装
@@ -110,9 +112,12 @@ drone/
    - Cartographer 2D SLAM 安装与配置
    - ROS Navigation Stack (move_base) 安装与配置
 
+4. **[Modular_fuctions/](./Modular_fuctions/)**
+   - 模块化功能集合，详见各子模块 README
+
 ## 快速启动
 
-完成上述三个步骤的安装后：
+完成上述步骤的安装后：
 
 ```bash
 # 一键启动所有节点
