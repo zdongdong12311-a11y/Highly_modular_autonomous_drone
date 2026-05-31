@@ -1,0 +1,32 @@
+# =============================================================
+# move_base_params.yaml - move_base 通用参数
+#
+# 适配无人机: 禁止旋转清障，调整超时
+# =============================================================
+
+# 关闭时是否关闭 costmap
+shutdown_costmaps: false
+
+# 控制器 (局部规划器) 频率
+controller_frequency: 10.0
+
+# 规划器等待时间 (规划失败后等待再重试)
+planner_patience: 5.0
+
+# 控制器等待时间
+controller_patience: 15.0
+
+# 保守复位距离 (米)
+conservative_reset_dist: 3.0
+
+# 全局规划器频率 (Hz) - 持续规划以应对动态障碍
+planner_frequency: 2.0       # 原 5.0 -> 2.0 (降低频率减少 CPU 负载)
+
+# 振荡超时 (秒) - 无人机不允许原地振荡
+oscillation_timeout: 3.0
+
+# 振荡检测距离 (米)
+oscillation_distance: 0.2
+
+# 禁止旋转清障 (无人机不能原地旋转)
+clearing_rotation_allowed: false

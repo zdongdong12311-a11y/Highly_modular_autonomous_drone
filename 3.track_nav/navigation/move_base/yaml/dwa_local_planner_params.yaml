@@ -1,0 +1,59 @@
+# =============================================================
+# dwa_local_planner_params.yaml - DWA 局部规划器参数
+#
+# 适配无人机全向移动特性:
+#   - 允许 XY 双向运动 (无人机可侧飞)
+#   - 禁止偏航旋转 (导航时 yaw_rate=0 锁航向)
+#   - 调整采样密度和权重提升规划质量
+# =============================================================
+
+DWAPlannerROS:
+
+  # ---- 速度限制 ----
+  # 无人机可全向移动，XY 对称
+  max_vel_x: 1.0             # 原 1.2 -> 1.0 (降低最大速度提高安全性)
+  min_vel_x: -1.0            # 原 -2.0 -> -1.0 (反向速度与正向对称)
+
+  max_vel_y: 1.0             # 原 2.0 -> 1.0 (降低最大侧飞速度)
+  min_vel_y: -1.0            # 原 -2.0 -> -1.0
+
+  max_vel_trans: 1.0         # 原 2.0 -> 1.0 (最大合成速度)
+  min_vel_trans: 0.05        # 原 0.08 -> 0.05 (允许更慢的移动)
+
+  # 偏航角速度 (无人机导航时锁航向，DWA 不规划旋转)
+  max_vel_theta: 0.0
+  min_vel_theta: 0.0
+
+  # ---- 加速度限制 ----
+  # 无人机加速度响应快，允许较高值
+  acc_lim_x: 5.0             # 原 10.0 -> 5.0 (降低加速度使运动更平滑)
+  acc_lim_y: 5.0             # 原 10.0 -> 5.0
+  acc_lim_theta: 0.0
+
+  # ---- 目标容差 ----
+  xy_goal_tolerance: 0.25    # 原 0.2 -> 0.25 (稍放宽，配合 navigation.py 的 0.3m 容差)
+  yaw_goal_tolerance: 1.57   # 保持宽松 (无人机不要求朝向)
+  latch_xy_goal_tolerance: false
+
+  # ---- 仿真参数 ----
+  sim_time: 2.5              # 原 3.0 -> 2.5 (缩短仿真时间提高响应速度)
+  vx_samples: 15             # 原 20 -> 15 (减少采样提升计算速度)
+  vy_samples: 15             # 原 20 -> 15
+  vth_samples: 1             # 原 40 -> 1 (禁止旋转，只需1个采样)
+  controller_frequency: 10.0
+
+  # ---- 评分权重 ----
+  path_distance_bias: 40.0   # 原 32.0 -> 40.0 (更紧跟全局路径)
+  goal_distance_bias: 24.0   # 原 20.0 -> 24.0 (更积极趋向目标)
+  occdist_scale: 0.1         # 原 0.05 -> 0.1 (更远离障碍物)
+  forward_point_distance: 0.325
+  stop_time_buffer: 0.2
+  scaling_speed: 0.25
+  max_scaling_factor: 0.2
+
+  # ---- 振荡检测 ----
+  oscillation_reset_dist: 0.05
+
+  # ---- 调试可视化 ----
+  publish_traj_pc: true
+  publish_cost_grid_pc: true

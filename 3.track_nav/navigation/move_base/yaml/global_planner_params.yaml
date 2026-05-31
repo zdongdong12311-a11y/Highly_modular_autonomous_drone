@@ -1,0 +1,8 @@
+GlobalPlanner:
+
+  # 是否使用Dijkstra算法（true=Dijkstra, false=A*算法）
+  use_dijkstra: True
+  # 是否生成网格路径（不进行梯度下降平滑）
+  use_grid_path: False
+  # 是否使用二次近似进行路径平滑
+  use_quadratic: True

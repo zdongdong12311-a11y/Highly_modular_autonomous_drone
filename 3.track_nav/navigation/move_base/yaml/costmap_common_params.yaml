@@ -1,0 +1,46 @@
+# =============================================================
+# costmap_common_params.yaml - 代价地图通用参数
+#
+# 适配无人机特性:
+#   - robot_radius 略大于实际尺寸，留安全余量
+#   - obstacle_range / raytrace_range 适配 Mid-360 2D 切片
+#   - inflation_radius 提供更安全的避障距离
+# =============================================================
+
+# 机器人半径 (米)，碰撞检测用
+# 实际无人机对角约 0.45m，设 0.3 + inflation 补偿
+robot_radius: 0.3
+
+obstacle_layer:
+  enabled: true
+  # 组合方式: 1 = 取最大值 (更安全)
+  combination_method: 1
+  track_unknown_space: true
+
+  # 障碍物高度范围 (2D 激光扫描已做切片，这里放宽避免误过滤)
+  min_obstacle_height: -5
+  max_obstacle_height: 10
+
+  # 障碍物检测范围 (米)
+  obstacle_range: 4.5      # 原 4 -> 4.5 (稍扩大检测范围)
+  raytrace_range: 6.0      # 原不变
+
+  # 观测数据源
+  observation_sources: laser_scan_sensor
+  laser_scan_sensor:
+    data_type: LaserScan
+    topic: /scan
+    marking: true
+    clearing: true
+    min_obstacle_height: -5
+    max_obstacle_height: 10
+
+inflation_layer:
+  enabled: true
+  # 代价缩放因子 (值越大，远离障碍物时代价衰减越快，路径更贴近障碍物边缘)
+  cost_scaling_factor: 5.0   # 原 10.0 -> 5.0 (膨胀区域代价衰减更慢，路径更保守)
+  # 膨胀半径 (米)
+  inflation_radius: 0.5      # 原 0.3 -> 0.5 (无人机需要更大安全间距)
+
+static_layer:
+  enabled: true
