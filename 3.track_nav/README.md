@@ -97,7 +97,9 @@ catkin_make_isolated --install --use-ninja -DPYTHON_EXECUTABLE=/usr/bin/python3
 ### 7. 运行
 
 ```bash
-roslaunch /path/to/Highly_modular_autonomous_drone-main/3.track_nav/cartographer/launch/livox.launch
+source ~/my_carto/install_isolated/setup.bash
+cd ~/my_carto
+
 ```
 
 ---
