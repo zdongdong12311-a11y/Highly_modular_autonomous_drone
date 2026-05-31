@@ -59,6 +59,8 @@ roslaunch /path/to/Highly_modular_autonomous_drone-main/2.3D_to_2D/point_to_scan
 ## 运行
 
 ```bash
+cd 3D_to_2D_ws
+source devel/setup.bash
 roslaunch /path/to/Highly_modular_autonomous_drone-main/2.3D_to_2D/point_to_scan.launch
 ```
 
