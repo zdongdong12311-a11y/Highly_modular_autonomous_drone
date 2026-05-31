@@ -99,7 +99,7 @@ catkin_make_isolated --install --use-ninja -DPYTHON_EXECUTABLE=/usr/bin/python3
 ```bash
 source ~/my_carto/install_isolated/setup.bash
 cd ~/my_carto
-
+roslaunch cartographer_ros livox.launch
 ```
 
 ---
@@ -135,6 +135,8 @@ source devel/setup.bash
 cp ~/path/yaml ~/path/navigation/move_base
 cp ~/path/config ~/path/navigation/move_base
 cp ~/path/launch ~/path/navigation/move_base
+catkin_make
+source devel/setup.bash
 ```
 
 ### 4. 配置文件说明
@@ -175,7 +177,9 @@ cp ~/path/launch ~/path/navigation/move_base
 ### 5. 运行
 
 ```bash
-roslaunch /path/to/Highly_modular_autonomous_drone-main/3.track_nav/navigation/move_base/launch/nav_3dto2d.launch
+source ~/ros_nav_ws/devel/setup.bash
+cd ~/ros_nav_ws
+roslaunch move_base 
 ```
 
 这将启动 move_base 节点和 RViz 可视化界面（含地图、代价地图、全局/局部路径、激光数据）。
