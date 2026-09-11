@@ -35,7 +35,6 @@ DWAPlannerROS:
   yaw_goal_tolerance: 1.57   # 保持宽松 (无人机不要求朝向)
   latch_xy_goal_tolerance: false
 
-  # ---- 仿真参数 ----
   sim_time: 2.5              # 原 3.0 -> 2.5 (缩短仿真时间提高响应速度)
   vx_samples: 15             # 原 20 -> 15 (减少采样提升计算速度)
   vy_samples: 15             # 原 20 -> 15
