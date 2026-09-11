@@ -6,10 +6,11 @@ import signal
 import threading
 import traceback
 import rospy
+import tf                                     # [新增·TF] ROS1 tf (TransformListener)
 from geometry_msgs.msg import PoseStamped, Twist
 from mavros_msgs.msg import PositionTarget, State, BatteryStatus
 from mavros_msgs.srv import CommandBool, SetMode
-from actionlib_msgs.msg import GoalID
+from actionlib_msgs.msg import GoalID, GoalStatusArray, GoalStatus   # [新增·mb]
 from tf import transformations
 
 # ===== type_mask 位定义 (置 1 = 忽略该字段, 与 MAVLink/mavros_msgs 一致) =====
@@ -18,11 +19,9 @@ IGNORE_VX, IGNORE_VY, IGNORE_VZ = 8, 16, 32
 IGNORE_AX, IGNORE_AY, IGNORE_AZ = 64, 128, 256
 IGNORE_YAW, IGNORE_YAW_RATE = 512, 1024
 
-# 速度 + 偏航角速率 (= 967; 旧值 1479 实际是"速度+偏航角", yaw_rate 被忽略)
 MASK_VEL_YAW_RATE = (IGNORE_X | IGNORE_Y | IGNORE_Z |
                      IGNORE_AX | IGNORE_AY | IGNORE_AZ |
                      IGNORE_YAW)
-# 位置 + 偏航角 (= 1528; 旧值 2552 多设了 FORCE 位)
 MASK_POS_YAW = (IGNORE_VX | IGNORE_VY | IGNORE_VZ |
                 IGNORE_AX | IGNORE_AY | IGNORE_AZ |
                 IGNORE_YAW_RATE)
@@ -42,9 +41,11 @@ class NavigationController:
         self.waypoint_timeout = rospy.get_param('~waypoint_timeout', 120.0)
         self.takeoff_timeout = rospy.get_param('~takeoff_timeout', 30.0)
         self.land_timeout = rospy.get_param('~land_timeout', 60.0)
-        self.low_battery_threshold = rospy.get_param('~low_battery_threshold', 20.0)  # %
+        self.low_battery_threshold = rospy.get_param('~low_battery_threshold', 20.0)
         self.low_battery_action = rospy.get_param('~low_battery_action', 'land')
         self.goal_frame = rospy.get_param('~goal_frame', 'map')
+        self.base_frame = rospy.get_param('~base_frame', 'base_link')   # [新增·TF] = costmap 的 robot_base_frame
+        self.local_frame = rospy.get_param('~local_frame', 'odom')      # [新增·TF] = mavros local_position 的 frame_id
         self.cmd_vel_timeout = rospy.get_param('~cmd_vel_timeout', 0.5)
         self.goal_connect_timeout = rospy.get_param('~goal_connect_timeout', 5.0)
 
@@ -68,16 +69,21 @@ class NavigationController:
         self._emergency_reason = ''
         self._shutdown_requested = False
 
+        self.tf_listener = tf.TransformListener()          # [新增·TF] map -> odom -> base_link
+        self.mb_goal_status = GoalStatus.PENDING           # [新增·mb] move_base 目标状态
+        self.mb_goal_send_time = rospy.Time(0)             # [新增·mb] 发目标时刻 (宽限用)
+
         # ---- 发布者 ----
         self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.goal_cancel_pub = rospy.Publisher('/move_base/cancel', GoalID, queue_size=10)
         self.setpoint_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
 
-        # ---- 订阅者 (回调只做轻量记录/置标志, 绝不跑降落流程) ----
+        # ---- 订阅者 ----
         rospy.Subscriber('/mavros/state', State, self.state_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.current_position_callback)
         rospy.Subscriber('/mavros/battery', BatteryStatus, self.battery_callback)
+        rospy.Subscriber('/move_base/status', GoalStatusArray, self.mb_status_callback)  # [新增·mb]
 
         # ---- 服务 ----
         try:
@@ -119,7 +125,6 @@ class NavigationController:
     def battery_callback(self, msg):
         self.battery = msg
         self.battery_received = True
-        # 注意: ROS1 MAVROS 的 percentage 是 0~1; -1/NaN 表示未知
         p = msg.percentage
         if math.isnan(p) or p < 0.0 or p > 1.0:
             return
@@ -127,13 +132,11 @@ class NavigationController:
             self._trigger_emergency_land('low_battery', '剩余电量 %.0f%%' % (p * 100.0))
 
     def cmd_vel_callback(self, msg):
-        # 真正的限幅 (旧版是丢弃整条消息并沿用旧值)
         self.cmd_vel_data.linear.x = self._clamp(msg.linear.x, -self.max_xy_speed, self.max_xy_speed)
         self.cmd_vel_data.linear.y = self._clamp(msg.linear.y, -self.max_xy_speed, self.max_xy_speed)
         if abs(msg.linear.x) > self.max_xy_speed or abs(msg.linear.y) > self.max_xy_speed:
             rospy.logwarn_throttle(1.0, "cmd_vel 限幅: vx=%.2f vy=%.2f", msg.linear.x, msg.linear.y)
         self.cmd_vel_time = rospy.Time.now()
-        # angular.z 不使用: 导航时锁定偏航 (yaw_rate=0)
 
     def current_position_callback(self, msg):
         self.current_position = msg
@@ -142,6 +145,11 @@ class NavigationController:
         q = [msg.pose.orientation.x, msg.pose.orientation.y,
              msg.pose.orientation.z, msg.pose.orientation.w]
         self.now_yaw = transformations.euler_from_quaternion(q)[2]
+
+    def mb_status_callback(self, msg):   # [新增·mb]
+        """move_base 目标状态: 0=PENDING 1=ACTIVE 3=SUCCEEDED 4=ABORTED 5=REJECTED 9=LOST"""
+        if msg.status_list:
+            self.mb_goal_status = msg.status_list[-1].status
 
     # ===================== 工具 =====================
 
@@ -162,6 +170,43 @@ class NavigationController:
         dy = self.current_position.pose.position.y - target_y
         return math.hypot(dx, dy)
 
+    # ============ [新增·TF] 坐标系统一 (map <-> PX4 local) ============
+
+    def get_map_xy(self):
+        """机体当前位置在 map 系下的 XY (与 move_base 目标同系); TF 不可用返回 None"""
+        try:
+            (trans, _) = self.tf_listener.lookupTransform(
+                self.goal_frame, self.base_frame, rospy.Time(0))
+            return trans[0], trans[1]
+        except tf.TransformException:
+            return None
+
+    def map_to_local(self, x, y, z):
+        """map 系航点 (x,y) 转 PX4 local 系, 用于发位置设定点;
+        z 按约定保持 local 系 (相对起飞点高度) 不转换; 失败返回 None"""
+        ps = PoseStamped()
+        ps.header.frame_id = self.goal_frame
+        ps.header.stamp = rospy.Time(0)
+        ps.pose.position.x = x
+        ps.pose.position.y = y
+        ps.pose.position.z = z
+        ps.pose.orientation.w = 1.0
+        try:
+            out = self.tf_listener.transformPose(self.local_frame, ps)
+            return out.pose.position.x, out.pose.position.y, z
+        except tf.TransformException:
+            return None
+
+    def log_frame_offset(self):
+        """起飞后调用一次: 打印 map->local 原点偏移, 量化两系是否重合"""
+        try:
+            (trans, _) = self.tf_listener.lookupTransform(
+                self.goal_frame, self.local_frame, rospy.Time(0))
+            rospy.loginfo("map->%s 原点偏移 (%.2f, %.2f) m (tol=%.2f); 偏差大说明必须走 TF 统一",
+                          self.local_frame, trans[0], trans[1], self.waypoint_xy_tol)
+        except tf.TransformException:
+            rospy.logwarn("map->%s TF 不可用, 无法检查坐标系偏移", self.local_frame)
+
     def _get_waypoint_path(self):
         ros_param_path = rospy.get_param('~waypoint_file', '')
         if ros_param_path and os.path.isfile(ros_param_path):
@@ -180,7 +225,7 @@ class NavigationController:
 
     @staticmethod
     def load_waypoints(filepath):
-        """解析航点文件: x y z hover_time; 支持 # 注释/空行, 坏行不崩溃"""
+        """解析航点文件: x y z hover_time (XY=map 系, z=相对起飞点高度); 支持 # 注释"""
         waypoints = []
         with open(filepath, 'r') as f:
             for line_num, line in enumerate(f, 1):
@@ -207,7 +252,6 @@ class NavigationController:
     # ===================== 紧急与中断 =====================
 
     def _trigger_emergency_land(self, reason_code, detail=''):
-        """只置标志 (线程安全); 降落统一由主线程执行, 回调里绝不跑降落流程"""
         with self._emergency_lock:
             if self._emergency_land_triggered:
                 return
@@ -384,9 +428,8 @@ class NavigationController:
         return False
 
     def navigation_target(self, x, y, z, hover_time=2.0):
-        """XY 由 move_base 规划, Z 由 PD 控制。返回是否到达"""
+        """XY 由 move_base 规划 (map 系), Z 由 PD 控制 (local 系)。返回是否到达"""
         self.target_z = z
-        # 复位 PD 状态 (避免上一航点残差造成 D 尖峰); 清零残余 cmd_vel
         self._prev_err_z = z - self.current_position.pose.position.z
         self._last_pid_time = rospy.Time.now()
         self.cmd_vel_data = Twist()
@@ -417,6 +460,13 @@ class NavigationController:
                 if self._should_abort():
                     return False
 
+                # [新增·mb] move_base 放弃目标 → 提前跳过 (不再干等 waypoint_timeout)
+                # 1.5s 宽限: 新目标刚发出时, status 数组里可能还挂着上一个目标的终态
+                if (self.mb_goal_status in (GoalStatus.ABORTED, GoalStatus.REJECTED, GoalStatus.LOST)
+                        and (rospy.Time.now() - self.mb_goal_send_time).to_sec() > 1.5):
+                    rospy.logwarn("move_base 已放弃目标 (recovery 用尽/规划失败), 跳过本航点")
+                    break
+
                 # 高度 PD (实测 dt, dt 异常时跳过 D 项)
                 now = rospy.Time.now()
                 dt = (now - self._last_pid_time).to_sec()
@@ -438,8 +488,13 @@ class NavigationController:
 
                 self.send_velocity_setpoint(v_x, v_y, v_z_pid, yaw_rate=0.0)
 
-                # 到达判定: XY + 松弛的 Z
-                dist = self.get_distance_to_target(x, y)
+                # [新增·TF] 到达判定: XY 在 map 系下计算 (与 move_base 目标同系)
+                map_xy = self.get_map_xy()
+                if map_xy is not None:
+                    dist = math.hypot(map_xy[0] - x, map_xy[1] - y)
+                else:
+                    dist = self.get_distance_to_target(x, y)  # TF 暂不可用, 退化为 local 系
+                    rospy.logwarn_throttle(2.0, "map->base_link TF 不可用, 到达判定退化为 local 系")
                 z_err = abs(err_z)
                 if dist < self.waypoint_xy_tol and z_err < 2.0 * self.waypoint_z_tol:
                     rospy.loginfo("到达航点! 距离 %.2f m, 高度误差 %.2f m", dist, z_err)
@@ -451,9 +506,15 @@ class NavigationController:
                     break
                 self.rate.sleep()
 
-            # 悬停: 到达 → 停目标; 超时 → 停当前 (未到达的目标可能在障碍物里!)
+            # [新增·TF] 悬停: 到达 → 目标点转 local 系再发 (TF 失败则原地悬停);
+            #            超时/被放弃 → 停当前 (未到达的目标可能在障碍物里!)
             if arrived:
-                hx, hy, hz = x, y, z
+                tgt = self.map_to_local(x, y, z)
+                if tgt is None:
+                    rospy.logwarn("TF 不可用, 到达后原地悬停 (不追目标坐标)")
+                    tgt = (self.current_position.pose.position.x,
+                           self.current_position.pose.position.y, z)
+                hx, hy, hz = tgt
             else:
                 hx = self.current_position.pose.position.x
                 hy = self.current_position.pose.position.y
@@ -562,6 +623,9 @@ class NavigationController:
         goal.pose.position.y = y
         goal.pose.orientation.w = 1.0
         self.goal_pub.publish(goal)
+        # [新增·mb] 状态复位 + 记录时刻: 防止上一个目标的终态 (如 ABORTED) 误杀新航点
+        self.mb_goal_status = GoalStatus.PENDING
+        self.mb_goal_send_time = rospy.Time.now()
         rospy.loginfo("发送 move_base 目标: (%.2f, %.2f)", x, y)
 
     def cancel_goal(self):
@@ -586,6 +650,9 @@ def main():
             elif nav.airborne:   # 起飞超时时可能已在半空, 必须降落
                 nav.land_at_current_position()
             return
+
+        # [新增·TF] 量化 map 与 PX4 local 两系偏移 (起飞后 TF 已热)
+        nav.log_frame_offset()
 
         # 2. 读航点
         try:
@@ -612,7 +679,7 @@ def main():
                 if not (nav.emergency or nav.shutdown_requested):
                     rospy.logwarn("航点 %d 未到达, 继续下一个。", i + 1)
 
-        # 4. 收尾
+        # 4. 收尾: 所有航点完成后自动降落
         if nav.emergency:
             nav.handle_emergency()
         elif nav.shutdown_requested:
