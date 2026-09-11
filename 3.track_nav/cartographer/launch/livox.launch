@@ -4,7 +4,7 @@
    <node name="cartographer_node" 
          pkg="cartographer_ros" 
          type="cartographer_node" 
-         args="-configuration_directory $(find cartographer_ros)/configuration_files -configuration_basename livox_test.lua"
+         args="-configuration_directory $(find cartographer_ros)/configuration_files -configuration_basename livox.lua"
          output="screen">
      <remap from="scan" to="/scan" />
      <remap from="odom" to="/mavros/local_position/odom" />
