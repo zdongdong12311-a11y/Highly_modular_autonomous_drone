@@ -12,11 +12,9 @@ planner_frequency: 2.0
 oscillation_timeout: 3.0
 oscillation_distance: 0.2
 
-# ---- 恢复行为: 去掉 rotate_recovery 的正确写法 ----
-# (clearing_rotation_allowed 是不存在的参数, 已删)
 recovery_behavior_enabled: true
 recovery_behaviors:
   - {name: conservative_reset, type: "clear_costmap_recovery/ClearCostmapRecovery"}
   - {name: aggressive_reset,   type: "clear_costmap_recovery/ClearCostmapRecovery"}
 
-# (GlobalPlanner 段已删: 专属参数只放 global_planner_params.yaml)
+
