@@ -25,4 +25,4 @@ inflation_layer:
 
 static_layer:
   enabled: true              # local 图若没加载 static_layer 插件, 此段自动无效(无害)
-# (track_unknown_space 已移走: 它是 costmap 顶层参数, 放层下不生效)
+
