@@ -49,22 +49,14 @@ Livox Mid-360 LiDAR
     └─→ MAVROS ↔ PX4 (飞控通信)
 ```
 
-## 安全机制
-
-本项目包含多层次安全保护:
-
-| 保护类型 | 触发条件 | 响应动作 |
-|----------|----------|----------|
-| **低电量降落** | 电池 < 20% (可配置) | 立即降落 |
-| **连接断开保护** | MAVROS 断连 | 紧急降落 |
-| **位姿超时保护** | 3s 无位姿更新 | 紧急降落 |
-| **航点超时跳转** | 单航点 > 120s (可配置) | 跳转下一航点 |
-| **起飞超时保护** | 起飞 > 30s 未达目标高度 | 切换 AUTO.LAND |
-| **Ctrl+C 安全降落** | 用户中断 | 优雅降落而非直接退出 |
-| **速度限幅** | move_base 发出超速指令 | 钳位到安全速度 |
-
-> **首次飞行前务必手持测试**，确认位姿无漂移后再解锁飞行。
-
+## 首飞自检
+```
+rostopic hz /scan                                     # 切片数据在流
+rostopic hz /mavros/local_position/odom               # DWA 的速度源
+rosrun tf tf_echo map base_link                       # TF 链完整 (map->odom->base_link)
+rosrun tf tf_echo map odom                            # 偏移量, 起飞后 log 也会打印
+rostopic echo /move_base/status -n1                   # 状态流正常
+```
 ## 坐标变换 (TF) 树
 
 ![TF Tree](./tf_tree.png)
@@ -186,26 +178,12 @@ python3 navigation.py _takeoff_height:=1.0 _waypoint_timeout:=60.0
 </node>
 ```
 
-#### 核心参数说明
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `takeoff_height` | 0.8 | 默认起飞高度 (m) |
-| `kp_z` | 1.5 | 高度 P 增益 |
-| `kd_z` | 0.0 | 高度 D 增益 (抑制振荡) |
-| `max_xy_speed` | 1.5 | 最大水平速度 (m/s) |
-| `max_z_speed` | 0.8 | 最大垂直速度 (m/s) |
-| `waypoint_xy_tol` | 0.3 | 到达航点 XY 容差 (m) |
-| `waypoint_timeout` | 120.0 | 单航点超时 (s) |
-| `low_battery_threshold` | 20.0 | 低电量阈值 (%) |
-| `waypoint_file` | 自动搜索 | 航点文件路径 |
-
-
 ## 航点文件格式
 
 编辑 `point.txt`，每行一个航点:
 
 ```
+约定：航点文件每行 x y z 悬停秒数,XY 是 map 系坐标，z 是相对起飞点的高度
 # 格式: x y z hover_time
 # x          - 目标点 X 坐标 (米, map 坐标系)
 # y          - 目标点 Y 坐标 (米, map 坐标系)
@@ -219,27 +197,11 @@ python3 navigation.py _takeoff_height:=1.0 _waypoint_timeout:=60.0
 0.0  0.0  0.6  2.0
 ```
 
-航点文件搜索优先级:
-1. ROS 参数 `~waypoint_file`
-2. 环境变量 `DRONE_WAYPOINT_FILE`
-3. 脚本同目录 `point.txt`
-4. `~/point.txt`
-
 ## 架构说明与已知限制
 
 ### 3D → 2D 转换
 
 `pointcloud_to_laserscan` 从去畸变点云 (`/cloud_registered_body`) 中提取高度范围 **-0.05m ~ +0.1m** 的水平切片，生成 2D 激光扫描。
-
-**限制**:
-- 只能检测无人机当前高度附近的障碍物
-- 无法感知切片上方或下方的障碍物
-- 本质上是 **2D 平面导航避障**，不是真 3D 避障
-
-**安全建议**:
-- 在开阔场地或已知天花板高度 > 飞行高度 + 1m 的环境中使用
-- 避免在低矮障碍物 (桌面、横梁) 附近飞行
-- 未来可考虑使用 3D 代价地图 (如 `voxblox` + `mplb`)
 
 ### FAST-LIO2 坐标系说明
 
@@ -263,16 +225,9 @@ python3 navigation.py _takeoff_height:=1.0 _waypoint_timeout:=60.0
 | `EKF2_EVP_NOISE` | 配合调优 | 视觉位置噪声 |
 | `EKF2_EVA_NOISE` | 配合调优 | 视觉姿态噪声 |
 
-延迟测量方法:
-
-```bash
-rostopic delay /mavros/vision_pose/pose
-rostopic delay /mavros/local_position/pose
-```
-
 ## 自主导航脚本详解
 
-### `navigation.py` — 纯航点导航
+### `navigation_simple.py` — 纯航点导航
 
 执行流程:
 1. 连接 MAVROS，等待飞控就绪
@@ -282,38 +237,6 @@ rostopic delay /mavros/local_position/pose
 5. 逐航点导航 (XY 由 move_base 规划，Z 由 PD 控制)
 6. 到达每个航点后悬停指定时长
 7. 全部完成后安全降落
-
-安全特性:
-- 低电量监测 → 自动降落
-- MAVROS 断连检测 → 紧急降落
-- 位姿超时检测 (>3s 无更新) → 紧急降落
-- Ctrl+C → 优雅安全降落
-- 航点超时 → 自动跳转下一航点
-
-## 一键启动脚本 (`start.sh`)
-
-启动顺序与延迟:
-
-| 序号 | 节点 | 延迟 | 说明 |
-|------|------|------|------|
-| 1 | lidar_to_mavros.launch | 8s | MAVROS + LiDAR 驱动 + FAST-LIO2 + 位姿桥接 |
-| 2 | point_to_scan.launch | 3s | 3D 点云 → 2D 激光扫描 |
-| 3 | livox.launch | 3s | Cartographer SLAM |
-| 4 | nav_3dto2d.launch | 3s | move_base + RViz |
-
-## 安全检查清单
-
-飞行前请逐项确认:
-
-- [ ] 机载电脑与飞控串口连接正常 (`/dev/ttyUSB0` 可访问)
-- [ ] Mid-360 网络连接正常 (`ping 192.168.1.1xx` 通)
-- [ ] 所有 ROS 包已编译并 source (无 `rospack find` 报错)
-- [ ] 手持测试: 位姿无显著漂移 (移动一圈回起点误差 < 10cm)
-- [ ] 遥控器失控保护 (Failsafe) 已配置
-- [ ] 电池满电 (> 90%)
-- [ ] 飞行场地无低矮障碍物 (桌面、横梁等)
-- [ ] EKF2_EV_DELAY 已实测并配置
-- [ ] 航点文件 `point.txt` 已准备且格式正确
 
 ## 常见问题
 
