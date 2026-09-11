@@ -89,7 +89,7 @@ catkin_make
 source ~/fast_lio2_ws/devel/setup.bash
 ```
 
-官方 hku-mars FAST-LIO 默认依赖 `livox_ros_driver`。如果你使用 `livox_ros_driver2`，需把 FAST-LIO 中的相关依赖名和 include 路径从 `livox_ros_driver` 改为 `livox_ros_driver2`，主要涉及：
+ FAST-LIO 默认依赖 `livox_ros_driver`。如果你使用 `livox_ros_driver2`，需把 FAST-LIO 中的相关依赖名和 include 路径从 `livox_ros_driver` 改为 `livox_ros_driver2`，主要涉及：
 
 | 文件 | 修改项 |
 |------|--------|
