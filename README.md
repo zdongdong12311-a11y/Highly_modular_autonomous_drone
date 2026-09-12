@@ -218,6 +218,7 @@ python3 navigation.py _takeoff_height:=1.0 _waypoint_timeout:=60.0
 | 参数 | 建议 | 说明 |
 |------|------|------|
 | `EKF2_EV_CTRL` | 启用水平/垂直位置和偏航融合 | 开启视觉位置融合 |
+| `EKF2_AID_MASK` | 启用水平/垂直位置和偏航融合 | 开启视觉位置融合 |(旧版)
 | `EKF2_HGT_MODE` | Vision | 高度源使用视觉 |
 | `EKF2_GPS_CTRL` | 关闭 GPS 融合 | 室内/无 GPS 场景 |
 | `EKF2_EV_DELAY` | 实测 | Mid-360 + FAST-LIO2 延迟需现场测 |
