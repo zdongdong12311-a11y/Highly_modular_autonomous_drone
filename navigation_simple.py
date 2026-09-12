@@ -6,7 +6,7 @@ import signal
 import threading
 import traceback
 import rospy
-import tf                                     # [新增·TF] ROS1 tf (TransformListener)
+import tf                                     
 from geometry_msgs.msg import PoseStamped, Twist
 from mavros_msgs.msg import PositionTarget, State, BatteryStatus
 from mavros_msgs.srv import CommandBool, SetMode
@@ -44,8 +44,8 @@ class NavigationController:
         self.low_battery_threshold = rospy.get_param('~low_battery_threshold', 20.0)
         self.low_battery_action = rospy.get_param('~low_battery_action', 'land')
         self.goal_frame = rospy.get_param('~goal_frame', 'map')
-        self.base_frame = rospy.get_param('~base_frame', 'base_link')   # [新增·TF] = costmap 的 robot_base_frame
-        self.local_frame = rospy.get_param('~local_frame', 'odom')      # [新增·TF] = mavros local_position 的 frame_id
+        self.base_frame = rospy.get_param('~base_frame', 'base_link')   
+        self.local_frame = rospy.get_param('~local_frame', 'odom')      
         self.cmd_vel_timeout = rospy.get_param('~cmd_vel_timeout', 0.5)
         self.goal_connect_timeout = rospy.get_param('~goal_connect_timeout', 5.0)
 
@@ -69,9 +69,9 @@ class NavigationController:
         self._emergency_reason = ''
         self._shutdown_requested = False
 
-        self.tf_listener = tf.TransformListener()          # [新增·TF] map -> odom -> base_link
-        self.mb_goal_status = GoalStatus.PENDING           # [新增·mb] move_base 目标状态
-        self.mb_goal_send_time = rospy.Time(0)             # [新增·mb] 发目标时刻 (宽限用)
+        self.tf_listener = tf.TransformListener()          
+        self.mb_goal_status = GoalStatus.PENDING           
+        self.mb_goal_send_time = rospy.Time(0)            
 
         # ---- 发布者 ----
         self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
@@ -83,7 +83,7 @@ class NavigationController:
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.current_position_callback)
         rospy.Subscriber('/mavros/battery', BatteryStatus, self.battery_callback)
-        rospy.Subscriber('/move_base/status', GoalStatusArray, self.mb_status_callback)  # [新增·mb]
+        rospy.Subscriber('/move_base/status', GoalStatusArray, self.mb_status_callback)  
 
         # ---- 服务 ----
         try:
@@ -170,7 +170,7 @@ class NavigationController:
         dy = self.current_position.pose.position.y - target_y
         return math.hypot(dx, dy)
 
-    # ============ [新增·TF] 坐标系统一 (map <-> PX4 local) ============
+    
 
     def get_map_xy(self):
         """机体当前位置在 map 系下的 XY (与 move_base 目标同系); TF 不可用返回 None"""
@@ -650,8 +650,7 @@ def main():
             elif nav.airborne:   # 起飞超时时可能已在半空, 必须降落
                 nav.land_at_current_position()
             return
-
-        # [新增·TF] 量化 map 与 PX4 local 两系偏移 (起飞后 TF 已热)
+          
         nav.log_frame_offset()
 
         # 2. 读航点
