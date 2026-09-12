@@ -10,11 +10,11 @@ import tf
 from geometry_msgs.msg import PoseStamped, Twist
 from mavros_msgs.msg import PositionTarget, State
 from mavros_msgs.srv import CommandBool, SetMode
-from actionlib_msgs.msg import GoalID, GoalStatusArray, GoalStatus   
+from actionlib_msgs.msg import GoalID, GoalStatusArray, GoalStatus   # [新增·mb]
 from tf import transformations
 
 # ===== type_mask (置 1 = 忽略该字段) =====
-# 直接使用官方常量: 512 是 FORCE, 1024 才是 IGNORE_YAW, 2048 是 IGNORE_YAW_RATE
+# [修正] 直接使用官方常量: 512 是 FORCE, 1024 才是 IGNORE_YAW, 2048 是 IGNORE_YAW_RATE
 # 速度控制: 只用 velocity + yaw_rate
 MASK_VEL_YAW_RATE = (PositionTarget.IGNORE_X | PositionTarget.IGNORE_Y | PositionTarget.IGNORE_Z |
                      PositionTarget.IGNORE_AX | PositionTarget.IGNORE_AY | PositionTarget.IGNORE_AZ |
