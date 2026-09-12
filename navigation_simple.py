@@ -8,24 +8,21 @@ import traceback
 import rospy
 import tf                                     
 from geometry_msgs.msg import PoseStamped, Twist
-from mavros_msgs.msg import PositionTarget, State, BatteryStatus
+from mavros_msgs.msg import PositionTarget, State
 from mavros_msgs.srv import CommandBool, SetMode
-from actionlib_msgs.msg import GoalID, GoalStatusArray, GoalStatus   # [新增·mb]
+from actionlib_msgs.msg import GoalID, GoalStatusArray, GoalStatus   
 from tf import transformations
 
-# ===== type_mask 位定义 (置 1 = 忽略该字段, 与 MAVLink/mavros_msgs 一致) =====
-IGNORE_X, IGNORE_Y, IGNORE_Z = 1, 2, 4
-IGNORE_VX, IGNORE_VY, IGNORE_VZ = 8, 16, 32
-IGNORE_AX, IGNORE_AY, IGNORE_AZ = 64, 128, 256
-IGNORE_YAW, IGNORE_YAW_RATE = 512, 1024
-#速度控制
-MASK_VEL_YAW_RATE = (IGNORE_X | IGNORE_Y | IGNORE_Z |
-                     IGNORE_AX | IGNORE_AY | IGNORE_AZ |
-                     IGNORE_YAW)
-#位置控制
-MASK_POS_YAW = (IGNORE_VX | IGNORE_VY | IGNORE_VZ |
-                IGNORE_AX | IGNORE_AY | IGNORE_AZ |
-                IGNORE_YAW_RATE)
+# ===== type_mask (置 1 = 忽略该字段) =====
+# 直接使用官方常量: 512 是 FORCE, 1024 才是 IGNORE_YAW, 2048 是 IGNORE_YAW_RATE
+# 速度控制: 只用 velocity + yaw_rate
+MASK_VEL_YAW_RATE = (PositionTarget.IGNORE_X | PositionTarget.IGNORE_Y | PositionTarget.IGNORE_Z |
+                     PositionTarget.IGNORE_AX | PositionTarget.IGNORE_AY | PositionTarget.IGNORE_AZ |
+                     PositionTarget.IGNORE_YAW)
+# 位置控制: 只用 position + yaw
+MASK_POS_YAW = (PositionTarget.IGNORE_VX | PositionTarget.IGNORE_VY | PositionTarget.IGNORE_VZ |
+                PositionTarget.IGNORE_AX | PositionTarget.IGNORE_AY | PositionTarget.IGNORE_AZ |
+                PositionTarget.IGNORE_YAW_RATE)
 
 
 class NavigationController:
@@ -42,8 +39,6 @@ class NavigationController:
         self.waypoint_timeout = rospy.get_param('~waypoint_timeout', 120.0)
         self.takeoff_timeout = rospy.get_param('~takeoff_timeout', 30.0)
         self.land_timeout = rospy.get_param('~land_timeout', 60.0)
-        self.low_battery_threshold = rospy.get_param('~low_battery_threshold', 20.0)
-        self.low_battery_action = rospy.get_param('~low_battery_action', 'land')
         self.goal_frame = rospy.get_param('~goal_frame', 'map')
         self.base_frame = rospy.get_param('~base_frame', 'base_link')   
         self.local_frame = rospy.get_param('~local_frame', 'odom')      
@@ -53,8 +48,6 @@ class NavigationController:
         # ---- 内部状态 ----
         self.current_state = State()
         self.current_position = PoseStamped()
-        self.battery = BatteryStatus()
-        self.battery_received = False
         self.pose_received = False
         self.last_pose_time = rospy.Time(0)
         self.now_yaw = 0.0
@@ -83,7 +76,6 @@ class NavigationController:
         rospy.Subscriber('/mavros/state', State, self.state_callback)
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.current_position_callback)
-        rospy.Subscriber('/mavros/battery', BatteryStatus, self.battery_callback)
         rospy.Subscriber('/move_base/status', GoalStatusArray, self.mb_status_callback)  
 
         # ---- 服务 ----
@@ -122,15 +114,6 @@ class NavigationController:
             self._trigger_emergency_land('disconnect', 'MAVROS 连接断开')
         if was_armed and not msg.armed and self.airborne:
             self._trigger_emergency_land('disarm', '飞行中意外上锁 (飞控 failsafe?)')
-
-    def battery_callback(self, msg):
-        self.battery = msg
-        self.battery_received = True
-        p = msg.percentage
-        if math.isnan(p) or p < 0.0 or p > 1.0:
-            return
-        if p * 100.0 < self.low_battery_threshold and self.current_state.armed and self.airborne:
-            self._trigger_emergency_land('low_battery', '剩余电量 %.0f%%' % (p * 100.0))
 
     def cmd_vel_callback(self, msg):
         self.cmd_vel_data.linear.x = self._clamp(msg.linear.x, -self.max_xy_speed, self.max_xy_speed)
@@ -171,8 +154,6 @@ class NavigationController:
         dy = self.current_position.pose.position.y - target_y
         return math.hypot(dx, dy)
 
-    
-
     def get_map_xy(self):
         """机体当前位置在 map 系下的 XY (与 move_base 目标同系); TF 不可用返回 None"""
         try:
@@ -183,7 +164,7 @@ class NavigationController:
             return None
 
     def map_to_local(self, x, y, z):
-        """map 系航点 (x,y) 转 PX4 local 系, 用于发位置设定点;
+        """map 系航点 转 PX4 local 系, 用于发位置设定点;
         z 按约定保持 local 系 (相对起飞点高度) 不转换; 失败返回 None"""
         ps = PoseStamped()
         ps.header.frame_id = self.goal_frame
@@ -343,25 +324,8 @@ class NavigationController:
             self.rate.sleep()
         return False
 
-    def _preflight_battery_ok(self):
-        if not self.battery_received:
-            rospy.logwarn("未收到电池数据, 跳过低电量检查 (检查 /mavros/battery?)")
-            return True
-        p = self.battery.percentage
-        if math.isnan(p) or p < 0.0 or p > 1.0:
-            rospy.logwarn("电池数据无效 (%.2f), 跳过低电量检查", p)
-            return True
-        if p * 100.0 < self.low_battery_threshold:
-            rospy.logerr("电量 %.0f%% 低于阈值 %.0f%%, 拒绝起飞!",
-                         p * 100.0, self.low_battery_threshold)
-            return False
-        rospy.loginfo("当前电量: %.0f%%", p * 100.0)
-        return True
-
     def set_offboard_and_arm(self):
         if not self.wait_for_fcu_ready():
-            return False
-        if not self._preflight_battery_ok():
             return False
 
         lock_x = self.current_position.pose.position.x
@@ -574,13 +538,7 @@ class NavigationController:
 
     def handle_emergency(self):
         """紧急情况处置 (只在主线程调用)"""
-        if self._emergency_reason == 'low_battery' and self.low_battery_action == 'rtl':
-            rospy.loginfo("低电量: 切换 PX4 AUTO.RTL 返航...")
-            self._switch_mode('AUTO.RTL')
-            self._wait_landed(60.0)
-            self._try_disarm()
-        else:
-            self.land_at_current_position()
+        self.land_at_current_position()
 
     def _wait_landed(self, timeout=30.0):
         start_time = rospy.Time.now()
