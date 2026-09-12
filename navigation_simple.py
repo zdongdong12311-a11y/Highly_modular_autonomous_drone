@@ -18,10 +18,11 @@ IGNORE_X, IGNORE_Y, IGNORE_Z = 1, 2, 4
 IGNORE_VX, IGNORE_VY, IGNORE_VZ = 8, 16, 32
 IGNORE_AX, IGNORE_AY, IGNORE_AZ = 64, 128, 256
 IGNORE_YAW, IGNORE_YAW_RATE = 512, 1024
-
+#速度控制
 MASK_VEL_YAW_RATE = (IGNORE_X | IGNORE_Y | IGNORE_Z |
                      IGNORE_AX | IGNORE_AY | IGNORE_AZ |
                      IGNORE_YAW)
+#位置控制
 MASK_POS_YAW = (IGNORE_VX | IGNORE_VY | IGNORE_VZ |
                 IGNORE_AX | IGNORE_AY | IGNORE_AZ |
                 IGNORE_YAW_RATE)
@@ -460,7 +461,7 @@ class NavigationController:
                 if self._should_abort():
                     return False
 
-                # [新增·mb] move_base 放弃目标 → 提前跳过 (不再干等 waypoint_timeout)
+                
                 # 1.5s 宽限: 新目标刚发出时, status 数组里可能还挂着上一个目标的终态
                 if (self.mb_goal_status in (GoalStatus.ABORTED, GoalStatus.REJECTED, GoalStatus.LOST)
                         and (rospy.Time.now() - self.mb_goal_send_time).to_sec() > 1.5):
@@ -488,7 +489,7 @@ class NavigationController:
 
                 self.send_velocity_setpoint(v_x, v_y, v_z_pid, yaw_rate=0.0)
 
-                # [新增·TF] 到达判定: XY 在 map 系下计算 (与 move_base 目标同系)
+               
                 map_xy = self.get_map_xy()
                 if map_xy is not None:
                     dist = math.hypot(map_xy[0] - x, map_xy[1] - y)
@@ -506,7 +507,7 @@ class NavigationController:
                     break
                 self.rate.sleep()
 
-            # [新增·TF] 悬停: 到达 → 目标点转 local 系再发 (TF 失败则原地悬停);
+            
             #            超时/被放弃 → 停当前 (未到达的目标可能在障碍物里!)
             if arrived:
                 tgt = self.map_to_local(x, y, z)
